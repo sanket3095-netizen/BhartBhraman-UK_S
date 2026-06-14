@@ -1,0 +1,6 @@
+{
+  "name": "BharatBhraman",
+  "description": "Uttarakhand Family Travel OS - High-end companion app featuring itinerary routing, expense splitting, simplified debt settlements, shared media, document wallets, and an AI travel assistant.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
