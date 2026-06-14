@@ -10,6 +10,7 @@ import {
   IndianRupee, Pin, Phone, CheckCircle, AlertTriangle, 
   X, ExternalLink, Info, Loader2, RefreshCw
 } from "lucide-react";
+import { INITIAL_HOTELS } from "../data/initialData";
 
 interface HotelTrackerProps {
   onRefreshExpenses?: () => void;
@@ -46,12 +47,27 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
       if (response.ok) {
         const data = await response.json();
         setHotels(data);
+        try {
+          localStorage.setItem("bb_hotels", JSON.stringify(data));
+        } catch (storageErr) {
+          console.warn("Storage write exception:", storageErr);
+        }
       } else {
         throw new Error("Failed to load hotels from server.");
       }
     } catch (err: any) {
-      console.error("Error fetching hotels:", err);
-      setError("Failed to sync hotels with database. Showing local fallback.");
+      console.warn("Hotel fetch error, falling back locally:", err);
+      try {
+        const cached = localStorage.getItem("bb_hotels");
+        if (cached) {
+          setHotels(JSON.parse(cached));
+        } else {
+          setHotels(INITIAL_HOTELS);
+        }
+      } catch (storageErr) {
+        setHotels(INITIAL_HOTELS);
+      }
+      setError("Operating in offline local-only mode (server sync unavailable).");
     } finally {
       setLoading(false);
     }
@@ -139,6 +155,18 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
       pendingAmount: pAmt
     };
 
+    // Optimistically update React state and local storage fallback
+    const updatedHotels = editingId 
+      ? hotels.map(h => h.id === editingId ? payload : h)
+      : [...hotels, payload];
+    
+    setHotels(updatedHotels);
+    try {
+      localStorage.setItem("bb_hotels", JSON.stringify(updatedHotels));
+    } catch (storageErr) {
+      console.warn("Storage write exception:", storageErr);
+    }
+
     try {
       const response = await fetch("/api/hotels", {
         method: "POST",
@@ -154,7 +182,9 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
         throw new Error("Failed to save hotel details.");
       }
     } catch (err: any) {
-      setError(`Database update failed: ${err.message}`);
+      console.warn("Database update failed, saved locally and in local storage:", err);
+      setIsFormOpen(false);
+      setError("Details updated locally (server sync was unavailable).");
     } finally {
       setSaving(false);
     }
@@ -166,6 +196,15 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
     }
 
     setSaving(true);
+    // Optimistically update React state and local storage fallback
+    const updatedHotels = hotels.filter(h => h.id !== id);
+    setHotels(updatedHotels);
+    try {
+      localStorage.setItem("bb_hotels", JSON.stringify(updatedHotels));
+    } catch (storageErr) {
+      console.warn("Storage write exception:", storageErr);
+    }
+
     try {
       const response = await fetch(`/api/hotels/${id}`, {
         method: "DELETE",
@@ -176,7 +215,8 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
         throw new Error("Failed to delete booking.");
       }
     } catch (err: any) {
-      setError(`Deletion failed: ${err.message}`);
+      console.warn("Database deletion failed, removed locally instead:", err);
+      setError("Booking removed locally (server sync was unavailable).");
     } finally {
       setSaving(false);
     }

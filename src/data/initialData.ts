@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Member, Family, ItineraryDay, Hotel, Expense, Transfer, UploadedDocument, Memory, SplitType } from "../types";
+import { Member, Family, ItineraryDay, Hotel, Expense, Transfer, UploadedDocument, Memory, SplitType, PackingItem } from "../types";
 
 // 8 Members categorized into 3 Families
 export const INITIAL_MEMBERS: Member[] = [
@@ -447,3 +447,22 @@ export const INITIAL_MEMORIES: Memory[] = [
     authorId: "m-shruti"
   }
 ];
+
+export const INITIAL_PACKING_ITEMS: PackingItem[] = [
+  { id: "p-1", title: "Woolen sweaters and windproof jacket", category: "Clothing", status: false },
+  { id: "p-2", title: "Raincoat / compact umbrella for mountain showers", category: "Clothing", status: false },
+  { id: "p-3", title: "Comfortable trekking / walking shoes with grip", category: "Clothing", status: false },
+  { id: "p-4", title: "Warm socks & thermal wear", category: "Clothing", status: false },
+  { id: "p-5", title: "Power bank (20000mAh for travel)", category: "Electronics", status: false },
+  { id: "p-6", title: "Mobile chargers & multiple port socket", category: "Electronics", status: false },
+  { id: "p-7", title: "Universal adapter and car mobile mounts", category: "Electronics", status: false },
+  { id: "p-8", title: "Flashlight / headlight with extra batteries", category: "Electronics", status: false },
+  { id: "p-9", title: "Original Aadhar Cards / Government Identity Proofs", category: "Documents", status: false },
+  { id: "p-10", title: "Hotel booking vouchers & cab details", category: "Documents", status: false },
+  { id: "p-11", title: "Printed physical itinerary copy for safety", category: "Documents", status: false },
+  { id: "p-12", title: "Motion sickness pills (must-have for hill roads)", category: "Health & Toiletries", status: false },
+  { id: "p-13", title: "Sunscreen SPF 50+ & bug repellent", category: "Health & Toiletries", status: false },
+  { id: "p-14", title: "First aid kit (Painkillers, Bandages, ORS sachets)", category: "Health & Toiletries", status: false },
+  { id: "p-15", title: "Lip balm, cold cream, and basic toiletries", category: "Health & Toiletries", status: false },
+];
+

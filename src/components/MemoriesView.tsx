@@ -30,6 +30,7 @@ export default function MemoriesView({
   const [location, setLocation] = useState("");
   const [authorId, setAuthorId] = useState(members[0]?.id || "");
   const [selectedPhoto, setSelectedPhoto] = useState<string>("");
+  const [selectedMemoryForView, setSelectedMemoryForView] = useState<Memory | null>(null);
 
   const handleLocalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,13 +126,14 @@ export default function MemoriesView({
             <motion.div
               layout
               key={post.id}
-              className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/25 p-4.5 space-y-4 backdrop-blur-md relative"
+              onClick={() => setSelectedMemoryForView(post)}
+              className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/25 p-4.5 space-y-4 backdrop-blur-md relative cursor-pointer hover:border-slate-700 hover:bg-slate-950/40 hover:scale-[1.01] transition-all duration-300 shadow-md"
             >
               {/* Image Preview or Diary Icon */}
-              {post.type === "photo" && post.url ? (
+              {post.type === "photo" ? (
                 <div className="relative aspect-video w-full overflow-hidden rounded-2.5xl border border-slate-800 bg-slate-900">
                   <img
-                    src={post.url}
+                    src={post.url || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500&auto=format&fit=crop"}
                     alt={post.title}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     referrerPolicy="no-referrer"
@@ -148,7 +150,7 @@ export default function MemoriesView({
                   <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest font-display">
                     📝 Written Log / Travel Diary
                   </div>
-                  <p className="text-[11px] italic text-slate-400 leading-relaxed truncate-3-lines">
+                  <p className="text-[11px] italic text-slate-400 leading-relaxed truncate-3-lines5">
                     "{post.description}"
                   </p>
                 </div>
@@ -161,14 +163,17 @@ export default function MemoriesView({
                     {post.title}
                   </h3>
                   <button
-                    onClick={() => onDeleteMemory(post.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteMemory(post.id);
+                    }}
                     className="text-[10px] text-slate-500 hover:text-red-400 transition-colors"
                   >
                     Delete
                   </button>
                 </div>
                 {post.type === "photo" && post.description && (
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-xs text-slate-400 leading-relaxed truncate-2-lines">
                     {post.description}
                   </p>
                 )}
@@ -179,14 +184,17 @@ export default function MemoriesView({
                 <div className="flex items-center gap-1.5 font-mono">
                   <span className="text-sm">{author?.avatar}</span>
                   <span className="font-sans font-bold text-slate-400">{author?.name}</span>
-                  <span className="text-slate-650">•</span>
+                  <span className="text-slate-600">•</span>
                   <MapPin size={10} className="text-slate-600" />
                   <span>{post.location}</span>
                 </div>
 
                 <div className="flex items-center gap-3 select-none">
                   <button
-                    onClick={() => onLoveMemory(post.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onLoveMemory(post.id);
+                    }}
                     className="flex items-center gap-1 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
                   >
                     <Heart size={13} className="text-red-500 fill-red-500" />
@@ -332,6 +340,86 @@ export default function MemoriesView({
           </motion.div>
         </div>
       )}
+
+      {/* DETAILED MEMORY DETAIL / STORY POPUP VIEW MODAL */}
+      <AnimatePresence>
+        {selectedMemoryForView && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 sm:p-6 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg rounded-[2rem] border border-slate-800 bg-slate-950 overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-slate-900 flex items-center justify-between bg-slate-950">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl select-none">{members.find(m => m.id === selectedMemoryForView.authorId)?.avatar}</span>
+                  <div>
+                    <div className="font-display text-xs font-bold text-white">
+                      {members.find(m => m.id === selectedMemoryForView.authorId)?.name}
+                    </div>
+                    <div className="text-[9px] text-slate-500 font-mono tracking-tight mt-0.5">
+                      {selectedMemoryForView.date} • {selectedMemoryForView.location}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedMemoryForView(null)}
+                  className="rounded-full bg-slate-900 p-2 text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Content body */}
+              <div className="p-6 overflow-y-auto space-y-5 bg-slate-950/40">
+                {selectedMemoryForView.type === "photo" && (
+                  <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+                    <img
+                      src={selectedMemoryForView.url || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500&auto=format&fit=crop"}
+                      alt={selectedMemoryForView.title}
+                      className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <h3 className="font-display text-base font-extrabold text-white tracking-tight leading-snug">
+                    {selectedMemoryForView.title}
+                  </h3>
+                  {selectedMemoryForView.description ? (
+                    <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                      {selectedMemoryForView.description}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-500 italic">No description details written.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer action bar */}
+              <div className="p-5 border-t border-slate-900 flex items-center justify-between bg-slate-950">
+                <button
+                  onClick={() => {
+                    onLoveMemory(selectedMemoryForView.id);
+                    setSelectedMemoryForView(prev => prev ? { ...prev, loves: prev.loves + 1 } : null);
+                  }}
+                  className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3.5 py-2 rounded-xl text-slate-300 hover:text-red-400 font-medium text-[11px] transition cursor-pointer"
+                >
+                  <Heart size={12} className="text-red-500 fill-red-500" />
+                  <span>{selectedMemoryForView.loves} Loves</span>
+                </button>
+
+                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 font-display">
+                  {selectedMemoryForView.type === "photo" ? "📸 Shared snapshot" : "📝 Travelogue Diary"}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

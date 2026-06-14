@@ -9,6 +9,7 @@ import {
   CheckSquare, Square, Plus, Trash2, Tag, 
   Layers, Filter, RefreshCw, Loader2, AlertCircle, Sparkles
 } from "lucide-react";
+import { INITIAL_PACKING_ITEMS } from "../data/initialData";
 
 export default function PackingList() {
   const [items, setItems] = useState<PackingItem[]>([]);
@@ -32,12 +33,27 @@ export default function PackingList() {
       if (response.ok) {
         const data = await response.json();
         setItems(data);
+        try {
+          localStorage.setItem("bb_packing", JSON.stringify(data));
+        } catch (storageErr) {
+          console.warn("Storage write exception:", storageErr);
+        }
       } else {
         throw new Error("Could not load packing items.");
       }
     } catch (err: any) {
-      console.error("Packing load error:", err);
-      setError("Failed to fetch packing list. Showing local list.");
+      console.warn("Packing load error, falling back locally:", err);
+      try {
+        const cached = localStorage.getItem("bb_packing");
+        if (cached) {
+          setItems(JSON.parse(cached));
+        } else {
+          setItems(INITIAL_PACKING_ITEMS);
+        }
+      } catch (storageErr) {
+        setItems(INITIAL_PACKING_ITEMS);
+      }
+      setError("Operating in offline local-only mode (server sync unavailable).");
     } finally {
       setLoading(false);
     }
@@ -49,13 +65,16 @@ export default function PackingList() {
 
   // Toggle item packing status
   const handleToggle = async (item: PackingItem) => {
-    // Optimistic state update
     const updatedStatus = !item.status;
     const updatedItem = { ...item, status: updatedStatus };
     
-    setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? updatedItem : i))
-    );
+    const updatedItems = items.map((i) => (i.id === item.id ? updatedItem : i));
+    setItems(updatedItems);
+    try {
+      localStorage.setItem("bb_packing", JSON.stringify(updatedItems));
+    } catch (storageErr) {
+      console.warn("Storage write exception:", storageErr);
+    }
 
     try {
       const response = await fetch("/api/packing", {
@@ -64,10 +83,10 @@ export default function PackingList() {
         body: JSON.stringify(updatedItem),
       });
       if (!response.ok) {
-        console.error("Postgres failed to save packing state.");
+        console.warn("Postgres failed to save packing state.");
       }
     } catch (e) {
-      console.error("Network packing toggle failed:", e);
+      console.warn("Network packing toggle failed, operating offline:", e);
     }
   };
 
@@ -85,6 +104,14 @@ export default function PackingList() {
       packedBy: packedBy.trim() || undefined,
     };
 
+    const updatedItems = [...items, newItem];
+    setItems(updatedItems);
+    try {
+      localStorage.setItem("bb_packing", JSON.stringify(updatedItems));
+    } catch (storageErr) {
+      console.warn("Storage write exception:", storageErr);
+    }
+
     try {
       const response = await fetch("/api/packing", {
         method: "POST",
@@ -93,14 +120,17 @@ export default function PackingList() {
       });
 
       if (response.ok) {
-        setItems((prev) => [...prev, newItem]);
         setTitle("");
         setPackedBy("");
+        await loadPackingList();
       } else {
         throw new Error("Failed to persist item.");
       }
     } catch (err: any) {
-      setError(`Failed to save item: ${err.message}`);
+      console.warn("Database failed to save item, operating offline:", err);
+      setTitle("");
+      setPackedBy("");
+      setError("Item saved locally (server sync was unavailable).");
     } finally {
       setSaving(false);
     }
@@ -108,18 +138,23 @@ export default function PackingList() {
 
   // Delete item
   const handleDeleteItem = async (id: string) => {
-    // Optimistic update
-    setItems((prev) => prev.filter((i) => i.id !== id));
+    const updatedItems = items.filter((i) => i.id !== id);
+    setItems(updatedItems);
+    try {
+      localStorage.setItem("bb_packing", JSON.stringify(updatedItems));
+    } catch (storageErr) {
+      console.warn("Storage write exception:", storageErr);
+    }
 
     try {
       const response = await fetch(`/api/packing/${id}`, {
         method: "DELETE",
       });
       if (!response.ok) {
-        console.error("Postgres failed to delete packing item.");
+        console.warn("Postgres failed to delete packing item.");
       }
     } catch (e) {
-      console.error("Network packing deletion failed:", e);
+      console.warn("Network packing deletion failed, operating offline:", e);
     }
   };
 
