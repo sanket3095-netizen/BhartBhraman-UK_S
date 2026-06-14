@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { ItineraryDay, Expense, Hotel } from "../types";
-import { Plus, Upload, Camera, CloudSun, Compass, Calendar, ArrowRight, ShieldCheck, MapPin, Users } from "lucide-react";
+import { 
+  Plus, Upload, Camera, CloudSun, Compass, Calendar, 
+  ArrowRight, ShieldCheck, MapPin, Users, Loader2 
+} from "lucide-react";
 import { motion } from "motion/react";
 
 interface DashboardProps {
@@ -15,6 +18,10 @@ interface DashboardProps {
   onNavigate: (tab: string) => void;
   onOpenQuickAdd: (type: "expense" | "document" | "memory") => void;
   totalBudget: number;
+  tripStartDate: string;
+  tripEndDate: string;
+  onUpdateStartDate: (date: string) => void;
+  onUpdateEndDate: (date: string) => void;
 }
 
 export default function Dashboard({
@@ -23,11 +30,97 @@ export default function Dashboard({
   hotels,
   onNavigate,
   onOpenQuickAdd,
-  totalBudget
+  totalBudget,
+  tripStartDate,
+  tripEndDate,
+  onUpdateStartDate,
+  onUpdateEndDate
 }: DashboardProps) {
+  // Weather state
+  const [weatherData, setWeatherData] = useState<any[]>([]);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+
+  // Fetch group live weather from secure server endpoint
+  useEffect(() => {
+    let active = true;
+    const fetchWeather = async () => {
+      try {
+        const response = await fetch("/api/weather");
+        if (response.ok && active) {
+          const data = await response.json();
+          setWeatherData(data);
+        }
+      } catch (err) {
+        console.warn("Could not load real-time Uttarakhand weather:", err);
+      } finally {
+        if (active) setWeatherLoading(false);
+      }
+    };
+
+    fetchWeather();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Helper mapping weather codes to friendly statuses
+  const getWeatherIconAndDesc = (code: number) => {
+    switch (code) {
+      case 0:
+        return { desc: "Sunny & Clear", emoji: "☀️" };
+      case 1:
+      case 2:
+      case 3:
+        return { desc: "Partly Cloudy", emoji: "⛅" };
+      case 45:
+      case 48:
+        return { desc: "Foggy Weather", emoji: "🌫️" };
+      case 51:
+      case 53:
+      case 55:
+        return { desc: "Light Drizzle", emoji: "🌧️" };
+      case 61:
+      case 63:
+      case 65:
+        return { desc: "Heavy Rain", emoji: "🌧️" };
+      case 71:
+      case 73:
+      case 75:
+        return { desc: "Snow Showers", emoji: "❄️" };
+      case 80:
+      case 81:
+      case 82:
+        return { desc: "Rain Showers", emoji: "🌦️" };
+      case 95:
+      case 96:
+      case 99:
+        return { desc: "Thunderstorm", emoji: "⚡" };
+      default:
+        return { desc: "Mild Cool", emoji: "⛰️" };
+    }
+  };
+
   // Calculations
   const completedDays = itinerary.filter(d => d.completed).length;
-  const progressPct = itinerary.length > 0 ? Math.round((completedDays / itinerary.length) * 100) : 0;
+  
+  // Calculate exact timeline timeline elapsed progress (FIXES BUG)
+  const getTimelineProgress = () => {
+    const start = new Date(tripStartDate);
+    const end = new Date(tripEndDate);
+    const today = new Date(); // Or today (e.g. 2026-06-14 from current context)
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+    if (today < start) return 0;
+    if (today > end) return 100;
+
+    const totalMil = end.getTime() - start.getTime();
+    if (totalMil <= 0) return 100;
+
+    const elapsedMil = today.getTime() - start.getTime();
+    return Math.min(100, Math.max(0, Math.round((elapsedMil / totalMil) * 100)));
+  };
+
+  const progressPct = getTimelineProgress();
 
   const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
   const budgetProgress = Math.min(Math.round((totalSpent / totalBudget) * 100), 100);
@@ -64,9 +157,33 @@ export default function Dashboard({
             <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
               BharatBhraman
             </h1>
-            <p className="font-sans text-sm text-slate-400">
-              Uttarakhand Family Travel OS • 19 – 27 Jun
-            </p>
+            <div className="mt-3 space-y-2">
+              <p className="font-sans text-xs text-slate-400 font-bold uppercase tracking-wider">
+                Uttarakhand Family Travel OS
+              </p>
+              
+              <div className="flex gap-2 items-center text-xs mt-1.5 bg-slate-900/65 px-3 py-2 rounded-xl border border-slate-800 shadow-inner">
+                <div className="flex-1 min-w-0">
+                  <span className="text-[9px] text-orange-400 uppercase font-bold tracking-widest block mb-0.5">Start Date</span>
+                  <input 
+                    type="date"
+                    value={tripStartDate}
+                    onChange={(e) => onUpdateStartDate(e.target.value)}
+                    className="bg-transparent border-0 font-display text-xs text-white outline-none w-full font-bold cursor-pointer"
+                  />
+                </div>
+                <div className="text-slate-500 font-bold px-1 select-none">→</div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-[9px] text-amber-400 uppercase font-bold tracking-widest block mb-0.5">End Date</span>
+                  <input 
+                    type="date"
+                    value={tripEndDate}
+                    onChange={(e) => onUpdateEndDate(e.target.value)}
+                    className="bg-transparent border-0 font-display text-xs text-white outline-none w-full font-bold cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-2.5 text-center">
             <Compass className="animate-spin-slow h-8 w-8 text-cyan-400" />
@@ -189,18 +306,50 @@ export default function Dashboard({
       </div>
 
       {/* Weather widget & Live stay alerts */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="space-y-4">
         {/* Weather box */}
-        <div className="flex items-center justify-between rounded-2xl border border-slate-800/70 bg-gradient-to-r from-slate-950/40 to-slate-950/20 p-5 backdrop-blur-md">
-          <div>
-            <div className="text-xs text-cyan-400 font-semibold tracking-wider uppercase mb-1">Chakrata, Uttarakhand</div>
-            <div className="font-display text-3xl font-bold text-white">18°C</div>
-            <p className="mt-1 font-sans text-xs text-slate-400">Cool & Misty • Min 14°C / Max 22°C</p>
+        <div className="rounded-2xl border border-slate-800/70 bg-gradient-to-r from-slate-950/40 to-slate-950/20 p-5 backdrop-blur-md space-y-3.5">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-orange-400 uppercase tracking-widest flex items-center gap-1">
+              <CloudSun size={15} /> Real-time Uttarakhand weather
+            </h4>
+            <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-mono uppercase">
+              4 Spots Synced
+            </span>
           </div>
-          <div className="flex flex-col items-center text-slate-400">
-            <CloudSun size={38} className="text-amber-400 mb-1" />
-            <span className="text-[10px] uppercase font-mono tracking-wider">Light Clouds</span>
-          </div>
+
+          {weatherLoading ? (
+            <div className="flex items-center justify-center gap-2 py-3">
+              <Loader2 className="animate-spin text-orange-500 h-4 w-4" />
+              <span className="text-xs text-slate-400">Querying mountain stations...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3.5">
+              {(weatherData.length > 0 ? weatherData : [
+                { name: "Hanol", temp: 21, weatherCode: 3 },
+                { name: "Chakrata", temp: 18, weatherCode: 1 },
+                { name: "Mussoorie", temp: 19, weatherCode: 0 },
+                { name: "Dehradun", temp: 25, weatherCode: 2 }
+              ]).map((spot) => {
+                const info = getWeatherIconAndDesc(spot.weatherCode);
+                return (
+                  <div 
+                    key={spot.name}
+                    className="rounded-xl border border-slate-900 bg-slate-950/40 p-3 flex flex-col justify-between"
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className="text-xs font-bold text-slate-300 uppercase tracking-wide truncate">{spot.name}</span>
+                      <span className="text-base leading-none select-none">{info.emoji}</span>
+                    </div>
+                    <div className="mt-2.5">
+                      <span className="text-lg font-black text-white">{spot.temp}°C</span>
+                      <span className="block text-[10px] text-slate-500 font-medium truncate mt-0.5">{info.desc}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Local offline notification bar */}

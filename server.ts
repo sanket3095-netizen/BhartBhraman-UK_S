@@ -8,6 +8,12 @@ import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import { 
+  getExpenses, saveExpense, deleteExpense,
+  getHotels, saveHotel, deleteHotel,
+  getPackingItems, savePackingItem, deletePackingItem,
+  getMemories, saveMemory, loveMemory, deleteMemory
+} from "./src/db/postgres.ts";
 
 // Load environment variables
 dotenv.config();
@@ -40,6 +46,223 @@ if (apiKey) {
 }
 
 // ---------------- SERVER API ENDPOINTS ----------------
+
+// PostgreSQL database CRUD proxy endpoints for Travel Expenses
+app.get("/api/expenses", async (req, res) => {
+  try {
+    const data = await getExpenses();
+    return res.json(data);
+  } catch (err: any) {
+    console.error("GET /api/expenses error:", err);
+    return res.status(500).json({ error: "Failed to fetch expenses from database", details: err.message });
+  }
+});
+
+app.post("/api/expenses", async (req, res) => {
+  try {
+    const expense = req.body;
+    if (!expense || !expense.id || !expense.title) {
+      return res.status(400).json({ error: "Invalid expense data. 'id' and 'title' are required." });
+    }
+    await saveExpense(expense);
+    return res.json({ success: true, message: "Expense saved successfully to database" });
+  } catch (err: any) {
+    console.error("POST /api/expenses error:", err);
+    return res.status(500).json({ error: "Failed to save expense in database", details: err.message });
+  }
+});
+
+app.delete("/api/expenses/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Expense ID is required." });
+    }
+    await deleteExpense(id);
+    return res.json({ success: true, message: "Expense deleted successfully from database" });
+  } catch (err: any) {
+    console.error("DELETE /api/expenses/:id error:", err);
+    return res.status(500).json({ error: "Failed to delete expense from database", details: err.message });
+  }
+});
+
+// Weather API: real-time fetch from Open-Meteo for the 4 Uttarakhand spots
+app.get("/api/weather", async (req, res) => {
+  try {
+    const spots = [
+      { name: "Hanol", lat: 30.95, lon: 77.93 },
+      { name: "Chakrata", lat: 30.70, lon: 77.87 },
+      { name: "Mussoorie", lat: 30.46, lon: 78.08 },
+      { name: "Dehradun", lat: 30.32, lon: 78.03 }
+    ];
+
+    const weatherData = await Promise.all(
+      spots.map(async (spot) => {
+        try {
+          const url = `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`;
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch weather for ${spot.name}`);
+          }
+          const data = await response.json();
+          return {
+            name: spot.name,
+            temp: data.current?.temperature_2m ?? 20,
+            weatherCode: data.current?.weather_code ?? 0,
+            humidity: data.current?.relative_humidity_2m ?? 60,
+            windSpeed: data.current?.wind_speed_10m ?? 5,
+          };
+        } catch (e: any) {
+          console.error(`Error fetching weather for ${spot.name}:`, e);
+          return {
+            name: spot.name,
+            temp: 20,
+            weatherCode: 1,
+            humidity: 55,
+            windSpeed: 4,
+            fallback: true
+          };
+        }
+      })
+    );
+
+    return res.json(weatherData);
+  } catch (err: any) {
+    console.error("GET /api/weather error:", err);
+    return res.status(500).json({ error: "Failed to fetch weather data", details: err.message });
+  }
+});
+
+// PostgreSQL database CRUD proxy endpoints for Hotel Tracker
+app.get("/api/hotels", async (req, res) => {
+  try {
+    const data = await getHotels();
+    return res.json(data);
+  } catch (err: any) {
+    console.error("GET /api/hotels error:", err);
+    return res.status(500).json({ error: "Failed to fetch hotels from database", details: err.message });
+  }
+});
+
+app.post("/api/hotels", async (req, res) => {
+  try {
+    const hotel = req.body;
+    if (!hotel || !hotel.id || !hotel.name) {
+      return res.status(400).json({ error: "Invalid hotel data. 'id' and 'name' are required." });
+    }
+    await saveHotel(hotel);
+    return res.json({ success: true, message: "Hotel saved successfully to database" });
+  } catch (err: any) {
+    console.error("POST /api/hotels error:", err);
+    return res.status(500).json({ error: "Failed to save hotel in database", details: err.message });
+  }
+});
+
+app.delete("/api/hotels/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Hotel ID is required." });
+    }
+    await deleteHotel(id);
+    return res.json({ success: true, message: "Hotel deleted successfully from database" });
+  } catch (err: any) {
+    console.error("DELETE /api/hotels/:id error:", err);
+    return res.status(500).json({ error: "Failed to delete hotel from database", details: err.message });
+  }
+});
+
+// PostgreSQL database CRUD proxy endpoints for Packing List Checklist
+app.get("/api/packing", async (req, res) => {
+  try {
+    const data = await getPackingItems();
+    return res.json(data);
+  } catch (err: any) {
+    console.error("GET /api/packing error:", err);
+    return res.status(500).json({ error: "Failed to fetch packing list from database", details: err.message });
+  }
+});
+
+app.post("/api/packing", async (req, res) => {
+  try {
+    const item = req.body;
+    if (!item || !item.id || !item.title) {
+      return res.status(400).json({ error: "Invalid packing item data. 'id' and 'title' are required." });
+    }
+    await savePackingItem(item);
+    return res.json({ success: true, message: "Packing item saved successfully to database" });
+  } catch (err: any) {
+    console.error("POST /api/packing error:", err);
+    return res.status(500).json({ error: "Failed to save packing item in database", details: err.message });
+  }
+});
+
+app.delete("/api/packing/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Packing item ID is required." });
+    }
+    await deletePackingItem(id);
+    return res.json({ success: true, message: "Packing item deleted successfully from database" });
+  } catch (err: any) {
+    console.error("DELETE /api/packing/:id error:", err);
+    return res.status(550).json({ error: "Failed to delete packing item from database", details: err.message });
+  }
+});
+
+// PostgreSQL database CRUD proxy endpoints for Travel Memories & Diaries
+app.get("/api/memories", async (req, res) => {
+  try {
+    const data = await getMemories();
+    return res.json(data);
+  } catch (err: any) {
+    console.error("GET /api/memories error:", err);
+    return res.status(500).json({ error: "Failed to fetch memories from database", details: err.message });
+  }
+});
+
+app.post("/api/memories", async (req, res) => {
+  try {
+    const memory = req.body;
+    if (!memory || !memory.id || !memory.title) {
+      return res.status(400).json({ error: "Invalid memory data. 'id' and 'title' are required." });
+    }
+    await saveMemory(memory);
+    return res.json({ success: true, message: "Memory saved successfully to database" });
+  } catch (err: any) {
+    console.error("POST /api/memories error:", err);
+    return res.status(500).json({ error: "Failed to save memory in database", details: err.message });
+  }
+});
+
+app.post("/api/memories/:id/love", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Memory ID is required." });
+    }
+    await loveMemory(id);
+    return res.json({ success: true, message: "Memory loved successfully in database" });
+  } catch (err: any) {
+    console.error("POST /api/memories/:id/love error:", err);
+    return res.status(500).json({ error: "Failed to love memory in database", details: err.message });
+  }
+});
+
+app.delete("/api/memories/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Memory ID is required." });
+    }
+    await deleteMemory(id);
+    return res.json({ success: true, message: "Memory deleted successfully from database" });
+  } catch (err: any) {
+    console.error("DELETE /api/memories/:id error:", err);
+    return res.status(500).json({ error: "Failed to delete memory from database", details: err.message });
+  }
+});
 
 // AI assistant query proxy with custom Uttarakhand context injections
 app.post("/api/ai-assistant", async (req, res) => {

@@ -47,6 +47,15 @@ export interface Hotel {
   bookingAmount?: number;
   advancePaid?: number;
   pendingAmount?: number;
+  bookingStatus?: string; // Confirmed, Pending, Cancelled
+}
+
+export interface PackingItem {
+  id: string;
+  title: string;
+  category: string;
+  status: boolean;
+  packedBy?: string;
 }
 
 export enum SplitType {

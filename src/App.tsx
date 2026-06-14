@@ -26,13 +26,15 @@ import MemoriesView from "./components/MemoriesView";
 import DocumentsView from "./components/DocumentsView";
 import AnalyticsView from "./components/AnalyticsView";
 import AIAssistant from "./components/AIAssistant";
+import HotelTracker from "./components/HotelTracker";
+import PackingList from "./components/PackingList";
 
 import { Home, Calendar, CreditCard, Compass, Camera, FileText, Bot, HelpCircle, X, Award, BarChart3, Receipt } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
   // Navigation tabs
-  const [activeTab, setActiveTab] = useState<string>("home");
+  const [activeTab, setActiveTab ] = useState<string>("home");
   const [showAiPopover, setShowAiPopover] = useState(false);
 
   // States with Local File/LocalStorage Cache persistence
@@ -42,55 +44,200 @@ export default function App() {
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
 
+  // Interactive Trip Start/End Dates state
+  const [tripStartDate, setTripStartDate] = useState<string>(() => {
+    try {
+      return localStorage.getItem("bb_trip_start") || "2026-06-19";
+    } catch (e) {
+      return "2026-06-19";
+    }
+  });
+  const [tripEndDate, setTripEndDate] = useState<string>(() => {
+    try {
+      return localStorage.getItem("bb_trip_end") || "2026-06-27";
+    } catch (e) {
+      return "2026-06-27";
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("bb_trip_start", tripStartDate);
+    } catch (e) {
+      console.warn("Storage writing exception:", e);
+    }
+  }, [tripStartDate]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("bb_trip_end", tripEndDate);
+    } catch (e) {
+      console.warn("Storage writing exception:", e);
+    }
+  }, [tripEndDate]);
+
   // Base read-only members definition
   const members: Member[] = INITIAL_MEMBERS;
   const families: Family[] = INITIAL_FAMILIES;
   const hotels = INITIAL_HOTELS;
   const BUDGET_CEILING = 150000; // ₹1,50,000 Total Group Budget Target
 
-  // Load from Storage
+  // Load from Storage & PostgreSQL DB API
   useEffect(() => {
-    const cachedItinerary = localStorage.getItem("bb_itinerary");
-    const cachedExpenses = localStorage.getItem("bb_expenses");
-    const cachedTransfers = localStorage.getItem("bb_transfers");
-    const cachedDocuments = localStorage.getItem("bb_documents");
-    const cachedMemories = localStorage.getItem("bb_memories");
+    let cachedItinerary = null;
+    let cachedTransfers = null;
+    let cachedDocuments = null;
+    let cachedMemories = null;
 
-    if (cachedItinerary) setItinerary(JSON.parse(cachedItinerary));
-    else setItinerary(INITIAL_ITINERARY);
+    try {
+      cachedItinerary = localStorage.getItem("bb_itinerary");
+      cachedTransfers = localStorage.getItem("bb_transfers");
+      cachedDocuments = localStorage.getItem("bb_documents");
+      cachedMemories = localStorage.getItem("bb_memories");
+    } catch (e) {
+      console.warn("Could not read from local storage:", e);
+    }
 
-    if (cachedExpenses) setExpenses(JSON.parse(cachedExpenses));
-    else setExpenses(INITIAL_EXPENSES);
+    if (cachedItinerary) {
+      try {
+        setItinerary(JSON.parse(cachedItinerary));
+      } catch (e) {
+        setItinerary(INITIAL_ITINERARY);
+      }
+    } else {
+      setItinerary(INITIAL_ITINERARY);
+    }
 
-    if (cachedTransfers) setTransfers(JSON.parse(cachedTransfers));
-    else setTransfers(INITIAL_TRANSFERS);
+    if (cachedTransfers) {
+      try {
+        setTransfers(JSON.parse(cachedTransfers));
+      } catch (e) {
+        setTransfers(INITIAL_TRANSFERS);
+      }
+    } else {
+      setTransfers(INITIAL_TRANSFERS);
+    }
 
-    if (cachedDocuments) setDocuments(JSON.parse(cachedDocuments));
-    else setDocuments(INITIAL_DOCUMENTS);
+    if (cachedDocuments) {
+      try {
+        setDocuments(JSON.parse(cachedDocuments));
+      } catch (e) {
+        setDocuments(INITIAL_DOCUMENTS);
+      }
+    } else {
+      setDocuments(INITIAL_DOCUMENTS);
+    }
 
-    if (cachedMemories) setMemories(JSON.parse(cachedMemories));
-    else setMemories(INITIAL_MEMORIES);
+    // Fetch live memories from PostgreSQL via server API
+    const loadDbMemories = async () => {
+      try {
+        const response = await fetch("/api/memories");
+        if (response.ok) {
+          const data = await response.json();
+          setMemories(data);
+        } else {
+          try {
+            const cachedMem = localStorage.getItem("bb_memories");
+            if (cachedMem) setMemories(JSON.parse(cachedMem));
+            else setMemories(INITIAL_MEMORIES);
+          } catch (e) {
+            setMemories(INITIAL_MEMORIES);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not reach PostgreSQL backend for memories. Using cached/fallback memories:", err);
+        try {
+          const cachedMem = localStorage.getItem("bb_memories");
+          if (cachedMem) setMemories(JSON.parse(cachedMem));
+          else setMemories(INITIAL_MEMORIES);
+        } catch (e) {
+          setMemories(INITIAL_MEMORIES);
+        }
+      }
+    };
+
+    // Fetch live expenses from PostgreSQL via server API
+    const loadDbExpenses = async () => {
+      try {
+        const response = await fetch("/api/expenses");
+        if (response.ok) {
+          const data = await response.json();
+          setExpenses(data);
+        } else {
+          // Fallback to local storage if API is not fully configured yet
+          try {
+            const cachedExp = localStorage.getItem("bb_expenses");
+            if (cachedExp) setExpenses(JSON.parse(cachedExp));
+            else setExpenses(INITIAL_EXPENSES);
+          } catch (e) {
+            setExpenses(INITIAL_EXPENSES);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not reach PostgreSQL backend. Using local storage / fallback data:", err);
+        try {
+          const cachedExp = localStorage.getItem("bb_expenses");
+          if (cachedExp) setExpenses(JSON.parse(cachedExp));
+          else setExpenses(INITIAL_EXPENSES);
+        } catch (e) {
+          setExpenses(INITIAL_EXPENSES);
+        }
+      }
+    };
+
+    loadDbMemories();
+    loadDbExpenses();
   }, []);
 
   // Save changes
   useEffect(() => {
-    if (itinerary.length > 0) localStorage.setItem("bb_itinerary", JSON.stringify(itinerary));
+    try {
+      if (itinerary.length > 0) localStorage.setItem("bb_itinerary", JSON.stringify(itinerary));
+    } catch (e) {
+      console.warn("Could not save itinerary to local storage:", e);
+    }
   }, [itinerary]);
 
   useEffect(() => {
-    if (expenses.length > 0) localStorage.setItem("bb_expenses", JSON.stringify(expenses));
-  }, [expenses]);
-
-  useEffect(() => {
-    if (transfers.length > 0) localStorage.setItem("bb_transfers", JSON.stringify(transfers));
+    try {
+      if (transfers.length > 0) localStorage.setItem("bb_transfers", JSON.stringify(transfers));
+    } catch (e) {
+      console.warn("Could not save transfers to local storage:", e);
+    }
   }, [transfers]);
 
   useEffect(() => {
-    if (documents.length > 0) localStorage.setItem("bb_documents", JSON.stringify(documents));
+    try {
+      // Reduce document upload cache image size if stored or catch Quota error safely
+      if (documents.length > 0) {
+        const simpleDocs = documents.map(d => {
+          if (d.url && d.url.startsWith("data:")) {
+            return { ...d, url: "" }; // Skip writing raw attachment images to local storage
+          }
+          return d;
+        });
+        localStorage.setItem("bb_documents", JSON.stringify(simpleDocs));
+      }
+    } catch (e) {
+      console.warn("Could not save documents to local storage:", e);
+    }
   }, [documents]);
 
   useEffect(() => {
-    if (memories.length > 0) localStorage.setItem("bb_memories", JSON.stringify(memories));
+    try {
+      if (memories.length > 0) {
+        const sanitizedMemories = memories.map(m => {
+          // Strip out large raw base64 data urls to prevent QuotaExceededError in localStorage
+          if (m.url && m.url.startsWith("data:")) {
+            return { ...m, url: "" };
+          }
+          return m;
+        });
+        localStorage.setItem("bb_memories", JSON.stringify(sanitizedMemories));
+      }
+    } catch (e) {
+      console.warn("Could not save memories to local storage:", e);
+    }
   }, [memories]);
 
   // Operations
@@ -108,16 +255,59 @@ export default function App() {
     );
   };
 
-  const handleAddExpense = (expenseData: Omit<Expense, "id">) => {
+  const handleAddExpense = async (expenseData: Omit<Expense, "id">) => {
+    const newId = `exp-${Date.now()}`;
     const newExp: Expense = {
       ...expenseData,
-      id: `exp-${Date.now()}`
+      id: newId
     };
+
+    // Optimistically update frontend state
     setExpenses(prev => [newExp, ...prev]);
+    // Also mirror to local storage cache as passive offline safeguard
+    try {
+      const currentAndNew = [newExp, ...expenses];
+      localStorage.setItem("bb_expenses", JSON.stringify(currentAndNew));
+    } catch (e) {
+      console.warn("Storage write error:", e);
+    }
+
+    // Persist to Postgres database via our secure API route
+    try {
+      const response = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newExp),
+      });
+      if (!response.ok) {
+        console.error("PostgreSQL backend returned non-OK during expense persistence.");
+      }
+    } catch (err) {
+      console.error("Network failure persisting expense to PostgreSQL db:", err);
+    }
   };
 
-  const handleDeleteExpense = (expenseId: string) => {
-    setExpenses(prev => prev.filter(e => e.id !== expenseId));
+  const handleDeleteExpense = async (expenseId: string) => {
+    // Optimistically update frontend states
+    const filtered = expenses.filter(e => e.id !== expenseId);
+    setExpenses(filtered);
+    try {
+      localStorage.setItem("bb_expenses", JSON.stringify(filtered));
+    } catch (e) {
+      console.warn("Storage write error:", e);
+    }
+
+    // Call deletion API on the backend
+    try {
+      const response = await fetch(`/api/expenses/${expenseId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        console.error("PostgreSQL backend returned non-OK during expense deletion.");
+      }
+    } catch (err) {
+      console.error("Network failure deleting expense from PostgreSQL db:", err);
+    }
   };
 
   const handleAddTransfer = (transferData: Omit<Transfer, "id">) => {
@@ -144,23 +334,65 @@ export default function App() {
     setDocuments(prev => prev.filter(d => d.id !== docId));
   };
 
-  const handleAddMemory = (memoryData: Omit<Memory, "id" | "loves">) => {
+  const handleAddMemory = async (memoryData: Omit<Memory, "id" | "loves">) => {
     const newMem: Memory = {
       ...memoryData,
       loves: 0,
       id: `mem-${Date.now()}`
     };
+
+    // Optimistically update frontend state
     setMemories(prev => [newMem, ...prev]);
+
+    // Persist to PostgreSQL database via our secure API route
+    try {
+      const response = await fetch("/api/memories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newMem),
+      });
+      if (!response.ok) {
+        console.error("PostgreSQL backend returned non-OK during memory persistence.");
+      }
+    } catch (err) {
+      console.error("Network failure persisting memory to PostgreSQL db:", err);
+    }
   };
 
-  const handleLoveMemory = (memoryId: string) => {
+  const handleLoveMemory = async (memoryId: string) => {
+    // Optimistically update frontend state
     setMemories(prev =>
       prev.map(m => (m.id === memoryId ? { ...m, loves: m.loves + 1 } : m))
     );
+
+    // Save to PostgreSQL via secure API route
+    try {
+      const response = await fetch(`/api/memories/${memoryId}/love`, {
+        method: "POST"
+      });
+      if (!response.ok) {
+        console.error("PostgreSQL backend returned non-OK during memory love operation.");
+      }
+    } catch (err) {
+      console.error("Network failure saving memory love to PostgreSQL db:", err);
+    }
   };
 
-  const handleDeleteMemory = (memoryId: string) => {
+  const handleDeleteMemory = async (memoryId: string) => {
+    // Optimistically update frontend state
     setMemories(prev => prev.filter(m => m.id !== memoryId));
+
+    // Delete in PostgreSQL via secure API route
+    try {
+      const response = await fetch(`/api/memories/${memoryId}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) {
+        console.error("PostgreSQL backend returned non-OK during memory deletion.");
+      }
+    } catch (err) {
+      console.error("Network failure deleting memory from PostgreSQL db:", err);
+    }
   };
 
   const handleQuickTriggerRepay = (settlement: any) => {
@@ -184,36 +416,67 @@ export default function App() {
       {/* Main Container */}
       <div className="max-w-md mx-auto min-h-screen flex flex-col relative bg-slate-950/80 border-x border-slate-900/60 shadow-2xl">
         
-        {/* Global application top action header */}
-        <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-md border-b border-slate-900/40 px-5 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 select-none" onClick={() => setActiveTab("home")}>
-            <Compass className="h-5 w-5 text-cyan-400 animate-spin-slow" />
-            <span className="font-display text-sm font-black tracking-tight text-white">BHARATBHRAMAN</span>
+        {/* Elegant Persistent Top Multi-Tab Navigation (DESIGN REFINEMENT) */}
+        <div className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-900/40 shadow-sm">
+          {/* Brand Row */}
+          <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-900/20">
+            <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setActiveTab("home")}>
+              <Compass className="h-5 w-5 text-orange-500 animate-spin-slow" />
+              <span className="font-display text-sm font-black tracking-widest text-white">BHARATBHRAMAN</span>
+            </div>
+            
+            <div className="flex items-center gap-1.5 font-sans">
+              <button
+                onClick={() => setActiveTab("settlements")}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition uppercase tracking-wide border ${
+                  activeTab === "settlements"
+                    ? "border-green-500/40 bg-green-500/10 text-green-400"
+                    : "border-slate-900 bg-slate-900/40 text-slate-400 hover:text-white"
+                }`}
+              >
+                Settle
+              </button>
+              <button
+                onClick={() => setActiveTab("analytics")}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition uppercase tracking-wide border ${
+                  activeTab === "analytics"
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                    : "border-slate-900 bg-slate-900/40 text-slate-400 hover:text-white"
+                }`}
+              >
+                Stats
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab("settlements")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all uppercase tracking-wide border ${
-                activeTab === "settlements"
-                  ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-400"
-                  : "border-slate-850 bg-slate-900/40 text-slate-400 hover:text-white"
-              }`}
-            >
-              <Receipt size={11} /> Settlements
-            </button>
-            <button
-              onClick={() => setActiveTab("analytics")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all uppercase tracking-wide border ${
-                activeTab === "analytics"
-                  ? "border-indigo-500/40 bg-indigo-505/10 text-indigo-400"
-                  : "border-slate-850 bg-slate-900/40 text-slate-400 hover:text-white"
-              }`}
-            >
-              <BarChart3 size={11} /> Analytics
-            </button>
+          {/* Persistent Core App Navigation Links switching tabs instantly */}
+          <div className="grid grid-cols-4 text-center px-1 border-slate-900/40">
+            {[
+              { id: "home", label: "Dashboard" },
+              { id: "hotel-tracker", label: "Hotels" },
+              { id: "expenses", label: "Expenses" },
+              { id: "packing-list", label: "Packing" }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                  activeTab === tab.id 
+                    ? "text-orange-400" 
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>{tab.label}</span>
+                {activeTab === tab.id && (
+                  <motion.div 
+                    layoutId="topActiveIndicator" 
+                    className="absolute bottom-0 left-1 right-1 h-0.5 bg-orange-500 rounded-full" 
+                  />
+                )}
+              </button>
+            ))}
           </div>
-        </header>
+        </div>
 
         {/* View Workspace panel mapping */}
         <main className="flex-1 px-5 py-6 overflow-y-auto">
@@ -229,7 +492,19 @@ export default function App() {
                 else if (type === "memory") setActiveTab("memories");
               }}
               totalBudget={BUDGET_CEILING}
+              tripStartDate={tripStartDate}
+              tripEndDate={tripEndDate}
+              onUpdateStartDate={setTripStartDate}
+              onUpdateEndDate={setTripEndDate}
             />
+          )}
+
+          {activeTab === "hotel-tracker" && (
+            <HotelTracker />
+          )}
+
+          {activeTab === "packing-list" && (
+            <PackingList />
           )}
 
           {activeTab === "itinerary" && (

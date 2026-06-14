@@ -253,7 +253,7 @@ export default function MemoriesView({
                     onClick={() => setType("diary")}
                     className={`flex-1 rounded-xl border py-2 text-xs font-semibold text-center transition-all ${
                       type === "diary"
-                        ? "border-indigo-505 bg-indigo-505/10 text-indigo-400"
+                        ? "border-indigo-500 bg-indigo-500/10 text-indigo-400"
                         : "border-slate-800 bg-slate-900/30 text-slate-500"
                     }`}
                   >
