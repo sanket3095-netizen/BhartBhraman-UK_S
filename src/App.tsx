@@ -3,18 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
-import { ItineraryDay, Expense, Transfer, UploadedDocument, Memory, Member, Family } from "./types";
-import {
-  INITIAL_MEMBERS,
-  INITIAL_FAMILIES,
-  INITIAL_HOTELS,
-  INITIAL_ITINERARY,
-  INITIAL_EXPENSES,
-  INITIAL_TRANSFERS,
-  INITIAL_DOCUMENTS,
-  INITIAL_MEMORIES
-} from "./data/initialData";
+import React, { useState } from "react";
+import { Expense, Transfer, UploadedDocument, Memory } from "./types";
+import { useSync } from "./context/SyncContext";
+import LoginView from "./components/LoginView";
 
 import Dashboard from "./components/Dashboard";
 import ItineraryView from "./components/ItineraryView";
@@ -29,374 +21,92 @@ import AIAssistant from "./components/AIAssistant";
 import HotelTracker from "./components/HotelTracker";
 import PackingList from "./components/PackingList";
 
-import { Home, Calendar, CreditCard, Compass, Camera, FileText, Bot, HelpCircle, X, Award, BarChart3, Receipt } from "lucide-react";
+import { Home, Calendar, CreditCard, Compass, Camera, FileText, Bot, X, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
+  const {
+    syncStatus,
+    activeUser,
+    isAuthenticated,
+    tripStartDate,
+    tripEndDate,
+    updateTripDates,
+    members,
+    families,
+    itinerary,
+    expenses,
+    transfers,
+    documents,
+    memories,
+    hotels,
+    saveExpense,
+    deleteExpense,
+    saveTransfer,
+    deleteTransfer,
+    saveDocument,
+    deleteDocument,
+    saveMemory,
+    loveMemory,
+    deleteMemory,
+    toggleItineraryComplete,
+    addItineraryNote,
+    logout,
+    firebaseError,
+    tryEnableFirebase
+  } = useSync();
+
   // Navigation tabs
   const [activeTab, setActiveTab ] = useState<string>("home");
   const [showAiPopover, setShowAiPopover] = useState(false);
-
-  // States with Local File/LocalStorage Cache persistence
-  const [itinerary, setItinerary] = useState<ItineraryDay[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
-  const [memories, setMemories] = useState<Memory[]>([]);
-
-  // Interactive Trip Start/End Dates state
-  const [tripStartDate, setTripStartDate] = useState<string>(() => {
-    try {
-      return localStorage.getItem("bb_trip_start") || "2026-06-19";
-    } catch (e) {
-      return "2026-06-19";
-    }
-  });
-  const [tripEndDate, setTripEndDate] = useState<string>(() => {
-    try {
-      return localStorage.getItem("bb_trip_end") || "2026-06-27";
-    } catch (e) {
-      return "2026-06-27";
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("bb_trip_start", tripStartDate);
-    } catch (e) {
-      console.warn("Storage writing exception:", e);
-    }
-  }, [tripStartDate]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("bb_trip_end", tripEndDate);
-    } catch (e) {
-      console.warn("Storage writing exception:", e);
-    }
-  }, [tripEndDate]);
-
-  // Base read-only members definition
-  const members: Member[] = INITIAL_MEMBERS;
-  const families: Family[] = INITIAL_FAMILIES;
-  const hotels = INITIAL_HOTELS;
   const BUDGET_CEILING = 150000; // ₹1,50,000 Total Group Budget Target
-
-  // Load from Storage & PostgreSQL DB API
-  useEffect(() => {
-    let cachedItinerary = null;
-    let cachedTransfers = null;
-    let cachedDocuments = null;
-    let cachedMemories = null;
-
-    try {
-      cachedItinerary = localStorage.getItem("bb_itinerary");
-      cachedTransfers = localStorage.getItem("bb_transfers");
-      cachedDocuments = localStorage.getItem("bb_documents");
-      cachedMemories = localStorage.getItem("bb_memories");
-    } catch (e) {
-      console.warn("Could not read from local storage:", e);
-    }
-
-    if (cachedItinerary) {
-      try {
-        setItinerary(JSON.parse(cachedItinerary));
-      } catch (e) {
-        setItinerary(INITIAL_ITINERARY);
-      }
-    } else {
-      setItinerary(INITIAL_ITINERARY);
-    }
-
-    if (cachedTransfers) {
-      try {
-        setTransfers(JSON.parse(cachedTransfers));
-      } catch (e) {
-        setTransfers(INITIAL_TRANSFERS);
-      }
-    } else {
-      setTransfers(INITIAL_TRANSFERS);
-    }
-
-    if (cachedDocuments) {
-      try {
-        setDocuments(JSON.parse(cachedDocuments));
-      } catch (e) {
-        setDocuments(INITIAL_DOCUMENTS);
-      }
-    } else {
-      setDocuments(INITIAL_DOCUMENTS);
-    }
-
-    // Fetch live memories from PostgreSQL via server API
-    const loadDbMemories = async () => {
-      try {
-        const response = await fetch("/api/memories");
-        if (response.ok) {
-          const data = await response.json();
-          setMemories(data);
-        } else {
-          try {
-            const cachedMem = localStorage.getItem("bb_memories");
-            if (cachedMem) setMemories(JSON.parse(cachedMem));
-            else setMemories(INITIAL_MEMORIES);
-          } catch (e) {
-            setMemories(INITIAL_MEMORIES);
-          }
-        }
-      } catch (err) {
-        console.warn("Could not reach PostgreSQL backend for memories. Using cached/fallback memories:", err);
-        try {
-          const cachedMem = localStorage.getItem("bb_memories");
-          if (cachedMem) setMemories(JSON.parse(cachedMem));
-          else setMemories(INITIAL_MEMORIES);
-        } catch (e) {
-          setMemories(INITIAL_MEMORIES);
-        }
-      }
-    };
-
-    // Fetch live expenses from PostgreSQL via server API
-    const loadDbExpenses = async () => {
-      try {
-        const response = await fetch("/api/expenses");
-        if (response.ok) {
-          const data = await response.json();
-          setExpenses(data);
-        } else {
-          // Fallback to local storage if API is not fully configured yet
-          try {
-            const cachedExp = localStorage.getItem("bb_expenses");
-            if (cachedExp) setExpenses(JSON.parse(cachedExp));
-            else setExpenses(INITIAL_EXPENSES);
-          } catch (e) {
-            setExpenses(INITIAL_EXPENSES);
-          }
-        }
-      } catch (err) {
-        console.warn("Could not reach PostgreSQL backend. Using local storage / fallback data:", err);
-        try {
-          const cachedExp = localStorage.getItem("bb_expenses");
-          if (cachedExp) setExpenses(JSON.parse(cachedExp));
-          else setExpenses(INITIAL_EXPENSES);
-        } catch (e) {
-          setExpenses(INITIAL_EXPENSES);
-        }
-      }
-    };
-
-    loadDbMemories();
-    loadDbExpenses();
-  }, []);
-
-  // Save changes
-  useEffect(() => {
-    try {
-      if (itinerary.length > 0) localStorage.setItem("bb_itinerary", JSON.stringify(itinerary));
-    } catch (e) {
-      console.warn("Could not save itinerary to local storage:", e);
-    }
-  }, [itinerary]);
-
-  useEffect(() => {
-    try {
-      if (transfers.length > 0) localStorage.setItem("bb_transfers", JSON.stringify(transfers));
-    } catch (e) {
-      console.warn("Could not save transfers to local storage:", e);
-    }
-  }, [transfers]);
-
-  useEffect(() => {
-    try {
-      // Reduce document upload cache image size if stored or catch Quota error safely
-      if (documents.length > 0) {
-        const simpleDocs = documents.map(d => {
-          if (d.url && d.url.startsWith("data:")) {
-            return { ...d, url: "" }; // Skip writing raw attachment images to local storage
-          }
-          return d;
-        });
-        localStorage.setItem("bb_documents", JSON.stringify(simpleDocs));
-      }
-    } catch (e) {
-      console.warn("Could not save documents to local storage:", e);
-    }
-  }, [documents]);
-
-  useEffect(() => {
-    try {
-      if (memories.length > 0) {
-        const sanitizedMemories = memories.map(m => {
-          // Strip out large raw base64 data urls to prevent QuotaExceededError in localStorage
-          if (m.url && m.url.startsWith("data:")) {
-            return { ...m, url: "" };
-          }
-          return m;
-        });
-        localStorage.setItem("bb_memories", JSON.stringify(sanitizedMemories));
-      }
-    } catch (e) {
-      console.warn("Could not save memories to local storage:", e);
-    }
-  }, [memories]);
 
   // Operations
   const handleToggleItineraryComplete = (dayId: string) => {
-    setItinerary(prev =>
-      prev.map(day => (day.id === dayId ? { ...day, completed: !day.completed } : day))
-    );
+    toggleItineraryComplete(dayId);
   };
 
   const handleAddItineraryNote = (dayId: string, noteText: string) => {
-    setItinerary(prev =>
-      prev.map(day =>
-        day.id === dayId ? { ...day, notes: [...day.notes, noteText] } : day
-      )
-    );
+    addItineraryNote(dayId, noteText);
   };
 
   const handleAddExpense = async (expenseData: Omit<Expense, "id">) => {
-    const newId = `exp-${Date.now()}`;
-    const newExp: Expense = {
-      ...expenseData,
-      id: newId
-    };
-
-    // Optimistically update frontend state
-    setExpenses(prev => [newExp, ...prev]);
-    // Also mirror to local storage cache as passive offline safeguard
-    try {
-      const currentAndNew = [newExp, ...expenses];
-      localStorage.setItem("bb_expenses", JSON.stringify(currentAndNew));
-    } catch (e) {
-      console.warn("Storage write error:", e);
-    }
-
-    // Persist to Postgres database via our secure API route
-    try {
-      const response = await fetch("/api/expenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newExp),
-      });
-      if (!response.ok) {
-        console.error("PostgreSQL backend returned non-OK during expense persistence.");
-      }
-    } catch (err) {
-      console.error("Network failure persisting expense to PostgreSQL db:", err);
-    }
+    await saveExpense(expenseData);
   };
 
   const handleDeleteExpense = async (expenseId: string) => {
-    // Optimistically update frontend states
-    const filtered = expenses.filter(e => e.id !== expenseId);
-    setExpenses(filtered);
-    try {
-      localStorage.setItem("bb_expenses", JSON.stringify(filtered));
-    } catch (e) {
-      console.warn("Storage write error:", e);
-    }
-
-    // Call deletion API on the backend
-    try {
-      const response = await fetch(`/api/expenses/${expenseId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        console.error("PostgreSQL backend returned non-OK during expense deletion.");
-      }
-    } catch (err) {
-      console.error("Network failure deleting expense from PostgreSQL db:", err);
-    }
+    await deleteExpense(expenseId);
   };
 
-  const handleAddTransfer = (transferData: Omit<Transfer, "id">) => {
-    const newTrans: Transfer = {
-      ...transferData,
-      id: `trans-${Date.now()}`
-    };
-    setTransfers(prev => [newTrans, ...prev]);
+  const handleAddTransfer = async (transferData: Omit<Transfer, "id">) => {
+    await saveTransfer(transferData);
   };
 
-  const handleDeleteTransfer = (transferId: string) => {
-    setTransfers(prev => prev.filter(t => t.id !== transferId));
+  const handleDeleteTransfer = async (transferId: string) => {
+    await deleteTransfer(transferId);
   };
 
-  const handleAddDocument = (docData: Omit<UploadedDocument, "id">) => {
-    const newDoc: UploadedDocument = {
-      ...docData,
-      id: `doc-${Date.now()}`
-    };
-    setDocuments(prev => [newDoc, ...prev]);
+  const handleAddDocument = async (docData: Omit<UploadedDocument, "id">) => {
+    await saveDocument(docData);
   };
 
-  const handleDeleteDocument = (docId: string) => {
-    setDocuments(prev => prev.filter(d => d.id !== docId));
+  const handleDeleteDocument = async (docId: string) => {
+    await deleteDocument(docId);
   };
 
   const handleAddMemory = async (memoryData: Omit<Memory, "id" | "loves">) => {
-    const newMem: Memory = {
-      ...memoryData,
-      loves: 0,
-      id: `mem-${Date.now()}`
-    };
-
-    // Optimistically update frontend state
-    setMemories(prev => [newMem, ...prev]);
-
-    // Persist to PostgreSQL database via our secure API route
-    try {
-      const response = await fetch("/api/memories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newMem),
-      });
-      if (!response.ok) {
-        console.error("PostgreSQL backend returned non-OK during memory persistence.");
-      }
-    } catch (err) {
-      console.error("Network failure persisting memory to PostgreSQL db:", err);
-    }
+    await saveMemory({ ...memoryData, loves: 0 });
   };
 
   const handleLoveMemory = async (memoryId: string) => {
-    // Optimistically update frontend state
-    setMemories(prev =>
-      prev.map(m => (m.id === memoryId ? { ...m, loves: m.loves + 1 } : m))
-    );
-
-    // Save to PostgreSQL via secure API route
-    try {
-      const response = await fetch(`/api/memories/${memoryId}/love`, {
-        method: "POST"
-      });
-      if (!response.ok) {
-        console.error("PostgreSQL backend returned non-OK during memory love operation.");
-      }
-    } catch (err) {
-      console.error("Network failure saving memory love to PostgreSQL db:", err);
-    }
+    await loveMemory(memoryId);
   };
 
   const handleDeleteMemory = async (memoryId: string) => {
-    // Optimistically update frontend state
-    setMemories(prev => prev.filter(m => m.id !== memoryId));
-
-    // Delete in PostgreSQL via secure API route
-    try {
-      const response = await fetch(`/api/memories/${memoryId}`, {
-        method: "DELETE"
-      });
-      if (!response.ok) {
-        console.error("PostgreSQL backend returned non-OK during memory deletion.");
-      }
-    } catch (err) {
-      console.error("Network failure deleting memory from PostgreSQL db:", err);
-    }
+    await deleteMemory(memoryId);
   };
 
   const handleQuickTriggerRepay = (settlement: any) => {
-    // Triggers direct transfers logged modal/entry natively automatically
     handleAddTransfer({
       from: settlement.from,
       to: settlement.to,
@@ -405,6 +115,61 @@ export default function App() {
       note: "Settle Debt Cleared"
     });
   };
+
+  if (firebaseError) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-5 font-sans relative overflow-hidden">
+        {/* Background ambient light */}
+        <div className="absolute top-1/4 left-1/4 h-80 w-80 rounded-full bg-red-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+
+        <div className="w-full max-w-md bg-slate-900/60 border border-red-500/30 backdrop-blur-md rounded-[2.5rem] p-6 sm:p-8 shadow-2xl relative z-10 space-y-6 text-center">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/20 text-red-500 border border-red-500/30 shadow-lg mb-2">
+            <span className="text-2xl font-bold">⚠️</span>
+          </div>
+          <h1 className="font-display text-lg font-black tracking-widest text-red-400 uppercase leading-relaxed">
+            Firebase sync not connected
+          </h1>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Real-time synchronization for Uttarakhand 2026 trip is disconnected. We need a live connection to manage itinerary and expenses for all 8 family members.
+          </p>
+
+          <div className="bg-slate-950/80 rounded-2xl p-4 text-left text-[11px] text-slate-400 border border-slate-900/40 leading-relaxed font-sans space-y-2">
+            <span className="text-amber-400 font-bold block">How to enable real-time sync:</span>
+            <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
+              <li>Open the <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 font-bold hover:underline">Firebase Console</a>.</li>
+              <li>Navigate to <strong>Build &rarr; Authentication &rarr; Sign-in method</strong>.</li>
+              <li>Click <strong>Add new provider</strong>, select <strong>Anonymous</strong>, click <strong>Enable</strong>, and click <strong>Save</strong>.</li>
+            </ol>
+          </div>
+
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              onClick={async () => {
+                const ok = await tryEnableFirebase();
+                if (ok) {
+                  alert("Sync reconnected and activated successfully!");
+                } else {
+                  alert("Could not activate sync. Note: Verify Anonymous Auth is enabled in the Firebase Console first!");
+                }
+              }}
+              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-amber-600 hover:opacity-95 text-white font-bold text-xs py-3 rounded-2xl transition shadow-lg cursor-pointer"
+            >
+              Retry Firebase Sync Connection
+            </button>
+          </div>
+
+          <div className="text-[10px] text-slate-500 font-mono break-all bg-slate-950/45 p-2 rounded-xl">
+            {firebaseError}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !activeUser) {
+    return <LoginView />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/35 overflow-x-hidden">
@@ -422,47 +187,53 @@ export default function App() {
           <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-900/20">
             <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setActiveTab("home")}>
               <Compass className="h-5 w-5 text-orange-500 animate-spin-slow" />
-              <span className="font-display text-sm font-black tracking-widest text-white">BHARATBHRAMAN</span>
+              <div>
+                <span className="font-display text-sm font-black tracking-widest text-white">BHARATBHRAMAN</span>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <div className={`h-1.5 w-1.5 rounded-full ${
+                    syncStatus === "Online & Synced" ? "bg-emerald-500" :
+                    syncStatus === "Syncing" ? "bg-cyan-500 animate-pulse" :
+                    syncStatus === "Offline - pending changes" ? "bg-yellow-500 animate-pulse" : "bg-red-500 animate-pulse"
+                  }`} />
+                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                    {syncStatus}
+                  </span>
+                </div>
+              </div>
             </div>
             
             <div className="flex items-center gap-1.5 font-sans">
+              <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800/40 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-300">
+                <span className="text-xs">{activeUser?.avatar}</span>
+                <span className="max-w-[50px] truncate">{activeUser?.name}</span>
+              </div>
+              
               <button
-                onClick={() => setActiveTab("settlements")}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition uppercase tracking-wide border ${
-                  activeTab === "settlements"
-                    ? "border-green-500/40 bg-green-500/10 text-green-400"
-                    : "border-slate-900 bg-slate-900/40 text-slate-400 hover:text-white"
-                }`}
+                onClick={() => logout()}
+                title="Logout / Change user"
+                className="p-1 rounded-lg border border-slate-900 bg-slate-900/40 text-slate-400 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/10 transition cursor-pointer"
               >
-                Settle
-              </button>
-              <button
-                onClick={() => setActiveTab("analytics")}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition uppercase tracking-wide border ${
-                  activeTab === "analytics"
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                    : "border-slate-900 bg-slate-900/40 text-slate-400 hover:text-white"
-                }`}
-              >
-                Stats
+                <LogOut size={12} />
               </button>
             </div>
           </div>
 
           {/* Persistent Core App Navigation Links switching tabs instantly */}
-          <div className="grid grid-cols-4 text-center px-1 border-slate-900/40">
+          <div className="flex items-center gap-1 overflow-x-auto px-4 border-b border-slate-900/20 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[
               { id: "home", label: "Dashboard" },
               { id: "hotel-tracker", label: "Hotels" },
               { id: "expenses", label: "Expenses" },
+              { id: "settlements", label: "Splits" },
+              { id: "analytics", label: "Analysis" },
               { id: "packing-list", label: "Packing" }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                className={`relative py-3.5 px-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer flex-shrink-0 ${
                   activeTab === tab.id 
-                    ? "text-orange-400" 
+                    ? "text-orange-400 font-extrabold" 
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
@@ -477,6 +248,8 @@ export default function App() {
             ))}
           </div>
         </div>
+
+
 
         {/* View Workspace panel mapping */}
         <main className="flex-1 px-5 py-6 overflow-y-auto">
@@ -494,8 +267,8 @@ export default function App() {
               totalBudget={BUDGET_CEILING}
               tripStartDate={tripStartDate}
               tripEndDate={tripEndDate}
-              onUpdateStartDate={setTripStartDate}
-              onUpdateEndDate={setTripEndDate}
+              onUpdateStartDate={(start) => updateTripDates(start, tripEndDate)}
+              onUpdateEndDate={(end) => updateTripDates(tripStartDate, end)}
             />
           )}
 

@@ -125,10 +125,46 @@ export default function Dashboard({
   const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
   const budgetProgress = Math.min(Math.round((totalSpent / totalBudget) * 100), 100);
 
-  // Find current and upcoming stays
-  const currentDayIndex = itinerary.findIndex(d => d.date === "21 Jun") !== -1
-    ? itinerary.findIndex(d => d.date === "21 Jun") // Mocking active trip date around June 21 for demonstration
-    : 2;
+  // Find current and upcoming stays (sync is dynamic using mobile/system date)
+  const getSystemSyncDayIndex = () => {
+    const today = new Date();
+    
+    // Format today as e.g. "21 Jun"
+    const dayNumeric = today.getDate();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthStr = monthNames[today.getMonth()];
+    const todayStrInItinerary = `${dayNumeric} ${monthStr}`;
+
+    const matchIndex = itinerary.findIndex(d => {
+      return d.date.trim().toLowerCase() === todayStrInItinerary.trim().toLowerCase();
+    });
+
+    if (matchIndex !== -1) {
+      return matchIndex;
+    }
+
+    // Fallback: Check if we are before or after the overall trip dates
+    const start = new Date(tripStartDate);
+    const end = new Date(tripEndDate);
+    
+    if (today < start) {
+      return 0; // Show first day before trip starts
+    }
+    if (today > end) {
+      return Math.max(0, itinerary.length - 1); // Show last day after trip ends
+    }
+
+    // Fallback: If between start and end but no date label match
+    const elapsedMs = today.getTime() - start.getTime();
+    const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+    if (elapsedDays >= 0 && elapsedDays < itinerary.length) {
+      return elapsedDays;
+    }
+
+    return 2; // standard default center day of the trip
+  };
+
+  const currentDayIndex = getSystemSyncDayIndex();
 
   const currentDay = itinerary[currentDayIndex] || itinerary[0];
   const nextDay = itinerary[currentDayIndex + 1] || itinerary[itinerary.length - 1];

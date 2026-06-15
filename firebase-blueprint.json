@@ -1,0 +1,176 @@
+{
+  "entities": {
+    "Expense": {
+      "title": "Expense",
+      "description": "A travel expense split across family members",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "paidBy": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" },
+        "location": { "type": "string" },
+        "notes": { "type": "string" },
+        "splitType": { "type": "string" },
+        "participants": { "type": "array" },
+        "linkedDayId": { "type": "string" },
+        "billUrl": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "title", "amount", "paidBy", "date", "category", "splitType"]
+    },
+    "Transfer": {
+      "title": "Transfer",
+      "description": "A debt repayment settlement log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "note": { "type": "string" },
+        "proofUrl": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "from", "to", "amount", "date"]
+    },
+    "ItineraryDay": {
+      "title": "ItineraryDay",
+      "description": "An adjusted day of the Uttarakhand trip plan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "route": { "type": "string" },
+        "details": { "type": "string" },
+        "stayName": { "type": "string" },
+        "stayId": { "type": "string" },
+        "sightseeing": { "type": "array" },
+        "notes": { "type": "array" },
+        "foodSuggestions": { "type": "array" },
+        "completed": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "date", "route", "stayName"]
+    },
+    "UploadedDocument": {
+      "title": "UploadedDocument",
+      "description": "Digital receipts or travel certificate attachments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "url": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "date": { "type": "string" },
+        "size": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "type", "url", "uploadedBy", "date"]
+    },
+    "Memory": {
+      "title": "Memory",
+      "description": "Photos and diary travelogues from Uttarakhand",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string" },
+        "location": { "type": "string" },
+        "date": { "type": "string" },
+        "loves": { "type": "number" },
+        "authorId": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "type", "title", "location", "date", "authorId"]
+    },
+    "PackingItem": {
+      "title": "PackingItem",
+      "description": "Checklist item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "boolean" },
+        "packedBy": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "title", "category", "status"]
+    },
+    "Hotel": {
+      "title": "Hotel",
+      "description": "Accommodation details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "contact": { "type": "string" },
+        "roomAllocation": { "type": "string" },
+        "checkIn": { "type": "string" },
+        "checkOut": { "type": "string" },
+        "bookingAmount": { "type": "number" },
+        "advancePaid": { "type": "number" },
+        "pendingAmount": { "type": "number" },
+        "bookingStatus": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "location"]
+    },
+    "Member": {
+      "title": "Member",
+      "description": "Details about a family traveler",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "familyId": { "type": "string" },
+        "avatar": { "type": "string" },
+        "isOnline": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "familyId", "avatar"]
+    }
+  },
+  "firestore": {
+    "/trips/{tripId}/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Collection of all expenses linked to a trip"
+    },
+    "/trips/{tripId}/transfers/{transferId}": {
+      "schema": "Transfer",
+      "description": "Collection of peer-to-peer debt repayment logs"
+    },
+    "/trips/{tripId}/itinerary/{dayId}": {
+      "schema": "ItineraryDay",
+      "description": "The active itinerary entries for a trip"
+    },
+    "/trips/{tripId}/documents/{docId}": {
+      "schema": "UploadedDocument",
+      "description": "Metadata for uploaded user documents"
+    },
+    "/trips/{tripId}/memories/{memoryId}": {
+      "schema": "Memory",
+      "description": "Shared travel memory posts and dairy entries"
+    },
+    "/trips/{tripId}/packing/{itemId}": {
+      "schema": "PackingItem",
+      "description": "Checklist tracking for bags"
+    },
+    "/trips/{tripId}/hotels/{hotelId}": {
+      "schema": "Hotel",
+      "description": "Registered check-in accommodations"
+    },
+    "/trips/{tripId}/members/{memberId}": {
+      "schema": "Member",
+      "description": "Registered active family members"
+    }
+  }
+}

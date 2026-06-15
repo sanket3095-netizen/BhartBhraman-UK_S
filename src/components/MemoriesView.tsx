@@ -150,7 +150,7 @@ export default function MemoriesView({
                   <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest font-display">
                     📝 Written Log / Travel Diary
                   </div>
-                  <p className="text-[11px] italic text-slate-400 leading-relaxed truncate-3-lines5">
+                  <p className="text-[11px] italic text-slate-400 leading-relaxed line-clamp-3">
                     "{post.description}"
                   </p>
                 </div>

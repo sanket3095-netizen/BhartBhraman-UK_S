@@ -3,19 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { PackingItem } from "../types";
 import { 
   CheckSquare, Square, Plus, Trash2, Tag, 
-  Layers, Filter, RefreshCw, Loader2, AlertCircle, Sparkles
+  Layers, Sparkles
 } from "lucide-react";
-import { INITIAL_PACKING_ITEMS } from "../data/initialData";
+import { useSync } from "../context/SyncContext";
 
 export default function PackingList() {
-  const [items, setItems] = useState<PackingItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { packing: items, savePackingItem, deletePackingItem, togglePackingItem } = useSync();
 
   // New item inputs
   const [title, setTitle] = useState("");
@@ -24,70 +21,9 @@ export default function PackingList() {
 
   const categories = ["Clothing", "Electronics", "Documents", "Health & Toiletries", "Snacks & Others"];
 
-  // Load packing list items
-  const loadPackingList = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/packing");
-      if (response.ok) {
-        const data = await response.json();
-        setItems(data);
-        try {
-          localStorage.setItem("bb_packing", JSON.stringify(data));
-        } catch (storageErr) {
-          console.warn("Storage write exception:", storageErr);
-        }
-      } else {
-        throw new Error("Could not load packing items.");
-      }
-    } catch (err: any) {
-      console.warn("Packing load error, falling back locally:", err);
-      try {
-        const cached = localStorage.getItem("bb_packing");
-        if (cached) {
-          setItems(JSON.parse(cached));
-        } else {
-          setItems(INITIAL_PACKING_ITEMS);
-        }
-      } catch (storageErr) {
-        setItems(INITIAL_PACKING_ITEMS);
-      }
-      setError("Operating in offline local-only mode (server sync unavailable).");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadPackingList();
-  }, []);
-
   // Toggle item packing status
   const handleToggle = async (item: PackingItem) => {
-    const updatedStatus = !item.status;
-    const updatedItem = { ...item, status: updatedStatus };
-    
-    const updatedItems = items.map((i) => (i.id === item.id ? updatedItem : i));
-    setItems(updatedItems);
-    try {
-      localStorage.setItem("bb_packing", JSON.stringify(updatedItems));
-    } catch (storageErr) {
-      console.warn("Storage write exception:", storageErr);
-    }
-
-    try {
-      const response = await fetch("/api/packing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedItem),
-      });
-      if (!response.ok) {
-        console.warn("Postgres failed to save packing state.");
-      }
-    } catch (e) {
-      console.warn("Network packing toggle failed, operating offline:", e);
-    }
+    await togglePackingItem(item);
   };
 
   // Add new checklist item
@@ -95,67 +31,20 @@ export default function PackingList() {
     e.preventDefault();
     if (!title.trim()) return;
 
-    setSaving(true);
-    const newItem: PackingItem = {
-      id: `pack-${Date.now()}`,
+    await savePackingItem({
       title: title.trim(),
       category: category,
       status: false,
       packedBy: packedBy.trim() || undefined,
-    };
+    });
 
-    const updatedItems = [...items, newItem];
-    setItems(updatedItems);
-    try {
-      localStorage.setItem("bb_packing", JSON.stringify(updatedItems));
-    } catch (storageErr) {
-      console.warn("Storage write exception:", storageErr);
-    }
-
-    try {
-      const response = await fetch("/api/packing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newItem),
-      });
-
-      if (response.ok) {
-        setTitle("");
-        setPackedBy("");
-        await loadPackingList();
-      } else {
-        throw new Error("Failed to persist item.");
-      }
-    } catch (err: any) {
-      console.warn("Database failed to save item, operating offline:", err);
-      setTitle("");
-      setPackedBy("");
-      setError("Item saved locally (server sync was unavailable).");
-    } finally {
-      setSaving(false);
-    }
+    setTitle("");
+    setPackedBy("");
   };
 
   // Delete item
   const handleDeleteItem = async (id: string) => {
-    const updatedItems = items.filter((i) => i.id !== id);
-    setItems(updatedItems);
-    try {
-      localStorage.setItem("bb_packing", JSON.stringify(updatedItems));
-    } catch (storageErr) {
-      console.warn("Storage write exception:", storageErr);
-    }
-
-    try {
-      const response = await fetch(`/api/packing/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        console.warn("Postgres failed to delete packing item.");
-      }
-    } catch (e) {
-      console.warn("Network packing deletion failed, operating offline:", e);
-    }
+    await deletePackingItem(id);
   };
 
   // Group items by category
@@ -178,25 +67,10 @@ export default function PackingList() {
             <CheckSquare className="text-emerald-500 h-6 w-6" /> Packing List
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Coordinated family checklist synced to postgres
+            Coordinated family checklist synced to live Firestore
           </p>
         </div>
-        <button
-          onClick={loadPackingList}
-          disabled={loading}
-          className="p-2 w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
-          title="Refresh List"
-        >
-          <RefreshCw size={16} className={loading ? "animate-spin text-emerald-500" : ""} />
-        </button>
       </div>
-
-      {error && (
-        <div className="rounded-2xl bg-red-950/20 border border-red-500/30 p-4 text-sm text-red-300 flex items-start gap-2.5">
-          <AlertCircle className="shrink-0 text-red-500 mt-0.5" size={17} />
-          <div>{error}</div>
-        </div>
-      )}
 
       {/* Progress Box */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 space-y-3 shadow">
@@ -252,18 +126,17 @@ export default function PackingList() {
         </div>
         <button
           type="submit"
-          disabled={saving || !title.trim()}
+          disabled={!title.trim()}
           className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold uppercase text-xs tracking-wider transition flex items-center justify-center gap-1 cursor-pointer"
         >
-          {saving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={14} />} Add item to checklist
+          <Plus size={14} /> Add item to checklist
         </button>
       </form>
 
       {/* Categories Group list */}
-      {loading && items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-slate-500 space-y-2">
-          <Loader2 className="animate-spin text-emerald-500 h-8 w-8" />
-          <p className="text-sm font-medium">Checking live family baggage status...</p>
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-550 border border-dashed border-slate-800 rounded-3xl">
+          <p className="text-xs font-mono uppercase tracking-widest text-slate-500">No items listed. Get started by adding baggage above!</p>
         </div>
       ) : (
         <div className="space-y-6">

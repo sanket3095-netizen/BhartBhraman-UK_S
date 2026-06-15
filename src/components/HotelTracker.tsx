@@ -3,24 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Hotel } from "../types";
 import { 
   Building2, Plus, Trash2, Edit2, Calendar, 
-  IndianRupee, Pin, Phone, CheckCircle, AlertTriangle, 
-  X, ExternalLink, Info, Loader2, RefreshCw
+  IndianRupee, Pin, Phone, Info, X
 } from "lucide-react";
-import { INITIAL_HOTELS } from "../data/initialData";
+import { useSync } from "../context/SyncContext";
 
 interface HotelTrackerProps {
   onRefreshExpenses?: () => void;
 }
 
 export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
-  const [hotels, setHotels] = useState<Hotel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { hotels, saveHotel, deleteHotel } = useSync();
 
   // Form states
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -37,45 +33,6 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
   const [bookingAmount, setBookingAmount] = useState<number | "">("");
   const [advancePaid, setAdvancePaid] = useState<number | "">("");
   const [pendingAmount, setPendingAmount] = useState<number | "">("");
-
-  // Fetch hotels from database
-  const loadHotels = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/hotels");
-      if (response.ok) {
-        const data = await response.json();
-        setHotels(data);
-        try {
-          localStorage.setItem("bb_hotels", JSON.stringify(data));
-        } catch (storageErr) {
-          console.warn("Storage write exception:", storageErr);
-        }
-      } else {
-        throw new Error("Failed to load hotels from server.");
-      }
-    } catch (err: any) {
-      console.warn("Hotel fetch error, falling back locally:", err);
-      try {
-        const cached = localStorage.getItem("bb_hotels");
-        if (cached) {
-          setHotels(JSON.parse(cached));
-        } else {
-          setHotels(INITIAL_HOTELS);
-        }
-      } catch (storageErr) {
-        setHotels(INITIAL_HOTELS);
-      }
-      setError("Operating in offline local-only mode (server sync unavailable).");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadHotels();
-  }, []);
 
   const openAddForm = () => {
     setEditingId(null);
@@ -129,12 +86,8 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !location || !checkIn || !checkOut) {
-      setError("Please fill in all required fields (Hotel Name, Location, Check-in, Check-out).");
       return;
     }
-
-    setSaving(true);
-    setError(null);
 
     const bAmt = bookingAmount === "" ? 0 : Number(bookingAmount);
     const aPaid = advancePaid === "" ? 0 : Number(advancePaid);
@@ -155,71 +108,16 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
       pendingAmount: pAmt
     };
 
-    // Optimistically update React state and local storage fallback
-    const updatedHotels = editingId 
-      ? hotels.map(h => h.id === editingId ? payload : h)
-      : [...hotels, payload];
-    
-    setHotels(updatedHotels);
-    try {
-      localStorage.setItem("bb_hotels", JSON.stringify(updatedHotels));
-    } catch (storageErr) {
-      console.warn("Storage write exception:", storageErr);
-    }
-
-    try {
-      const response = await fetch("/api/hotels", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        setIsFormOpen(false);
-        await loadHotels();
-        if (onRefreshExpenses) onRefreshExpenses(); // trigger updates for other screens if aligned
-      } else {
-        throw new Error("Failed to save hotel details.");
-      }
-    } catch (err: any) {
-      console.warn("Database update failed, saved locally and in local storage:", err);
-      setIsFormOpen(false);
-      setError("Details updated locally (server sync was unavailable).");
-    } finally {
-      setSaving(false);
-    }
+    await saveHotel(payload);
+    setIsFormOpen(false);
+    if (onRefreshExpenses) onRefreshExpenses();
   };
 
   const handleDelete = async (id: string, hotelName: string) => {
     if (!window.confirm(`Are you sure you want to remove the booking for ${hotelName}?`)) {
       return;
     }
-
-    setSaving(true);
-    // Optimistically update React state and local storage fallback
-    const updatedHotels = hotels.filter(h => h.id !== id);
-    setHotels(updatedHotels);
-    try {
-      localStorage.setItem("bb_hotels", JSON.stringify(updatedHotels));
-    } catch (storageErr) {
-      console.warn("Storage write exception:", storageErr);
-    }
-
-    try {
-      const response = await fetch(`/api/hotels/${id}`, {
-        method: "DELETE",
-      });
-      if (response.ok) {
-        await loadHotels();
-      } else {
-        throw new Error("Failed to delete booking.");
-      }
-    } catch (err: any) {
-      console.warn("Database deletion failed, removed locally instead:", err);
-      setError("Booking removed locally (server sync was unavailable).");
-    } finally {
-      setSaving(false);
-    }
+    await deleteHotel(id);
   };
 
   return (
@@ -236,14 +134,6 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={loadHotels}
-            disabled={loading}
-            className="p-2 w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
-            title="Refresh database"
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin text-orange-500" : ""} />
-          </button>
-          <button
             onClick={openAddForm}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-950/20 hover:scale-[1.02] active:scale-95 transition"
           >
@@ -252,20 +142,8 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-2xl bg-red-950/20 border border-red-500/30 p-4 text-sm text-red-300 flex items-start gap-2.5">
-          <AlertTriangle className="shrink-0 text-red-500 mt-0.5" size={17} />
-          <div>{error}</div>
-        </div>
-      )}
-
       {/* Main Table view */}
-      {loading && hotels.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-slate-500 space-y-2">
-          <Loader2 className="animate-spin text-orange-500 h-8 w-8" />
-          <p className="text-sm font-medium">Fetching real-time group reservations...</p>
-        </div>
-      ) : hotels.length === 0 ? (
+      {hotels.length === 0 ? (
         <div className="rounded-3xl border border-slate-850 bg-slate-900/10 p-8 text-center text-slate-400 space-y-4">
           <Building2 size={40} className="mx-auto text-slate-700" />
           <div>
@@ -542,10 +420,8 @@ export default function HotelTracker({ onRefreshExpenses }: HotelTrackerProps) {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={saving}
                   className="w-full rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 py-3 text-center text-xs font-bold uppercase tracking-wider text-white hover:scale-[1.01] active:scale-95 transition-all shadow shadow-orange-950/20 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  {saving && <Loader2 size={14} className="animate-spin" />}
                   {editingId ? "Save Modifications" : "Save Hotel Booking"}
                 </button>
               </div>

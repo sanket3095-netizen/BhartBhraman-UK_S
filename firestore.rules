@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Help primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[-a-zA-Z0-9_]+$');
+    }
+
+    // Rules for Uttarakhand trip subcollections
+    match /trips/{tripId} {
+      allow get: if isSignedIn() && isValidId(tripId);
+      allow write: if isSignedIn() && isValidId(tripId);
+
+      match /expenses/{expenseId} {
+        allow get: if isSignedIn() && isValidId(tripId) && isValidId(expenseId);
+        allow list: if isSignedIn() && isValidId(tripId);
+        allow write: if isSignedIn() && isValidId(tripId) && isValidId(expenseId);
+      }
+
+      match /transfers/{transferId} {
+        allow get: if isSignedIn() && isValidId(tripId) && isValidId(transferId);
+        allow list: if isSignedIn() && isValidId(tripId);
+        allow write: if isSignedIn() && isValidId(tripId) && isValidId(transferId);
+      }
+
+      match /itinerary/{dayId} {
+        allow get: if isSignedIn() && isValidId(tripId) && isValidId(dayId);
+        allow list: if isSignedIn() && isValidId(tripId);
+        allow write: if isSignedIn() && isValidId(tripId) && isValidId(dayId);
+      }
+
+      match /documents/{docId} {
+        allow get: if isSignedIn() && isValidId(tripId) && isValidId(docId);
+        allow list: if isSignedIn() && isValidId(tripId);
+        allow write: if isSignedIn() && isValidId(tripId) && isValidId(docId);
+      }
+
+      match /memories/{memoryId} {
+        allow get: if isSignedIn() && isValidId(tripId) && isValidId(memoryId);
+        allow list: if isSignedIn() && isValidId(tripId);
+        allow write: if isSignedIn() && isValidId(tripId) && isValidId(memoryId);
+      }
+
+      match /packing/{itemId} {
+        allow get: if isSignedIn() && isValidId(tripId) && isValidId(itemId);
+        allow list: if isSignedIn() && isValidId(tripId);
+        allow write: if isSignedIn() && isValidId(tripId) && isValidId(itemId);
+      }
+
+      match /hotels/{hotelId} {
+        allow get: if isSignedIn() && isValidId(tripId) && isValidId(hotelId);
+        allow list: if isSignedIn() && isValidId(tripId);
+        allow write: if isSignedIn() && isValidId(tripId) && isValidId(hotelId);
+      }
+
+      match /members/{memberId} {
+        allow get: if isSignedIn() && isValidId(tripId) && isValidId(memberId);
+        allow list: if isSignedIn() && isValidId(tripId);
+        allow write: if isSignedIn() && isValidId(tripId) && isValidId(memberId);
+      }
+    }
+  }
+}
